@@ -2,5 +2,6 @@ __pycache__/
 *.pyc
 .c2patool/
 .ai-video-cleaner.json
+*.audit.json
 *.rej
 .DS_Store

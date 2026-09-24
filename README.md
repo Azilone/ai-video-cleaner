@@ -1,111 +1,74 @@
 # ai-video-cleaner
 
-Remux mp4/mov/m4v (libx264 crf20 + aac 128k) qui nettoie les exports
-Seedance / Dreamina (ByteDance) : brand ftyp `isom`, 1 track video,
-dates 1904, mdat avant moov, pas de metadata, pas d'audio par défaut.
+Clean explicit, locally visible AI-provenance signals from MP4/MOV/M4V files.
 
-## Usage
+## TL;DR
+
+```text
+video.mp4  ── inspect locally ──▶  video-clean.mp4
+```
+
+- Runs locally. No video is uploaded.
+- Copies video and audio streams by default, so encoded media stays unchanged.
+- Removes metadata and checks C2PA and known text markers.
+- Does not detect invisible watermarks or predict platform labels.
+
+## Before → After
+
+| Before | After |
+| --- | --- |
+| `video.mp4` | `video-clean.mp4` |
+| Metadata, C2PA, or known AI markers may be present | Explicit local signals are removed or reported |
+| Original video and audio | Video and audio copied unchanged by default |
+
+The tool re-audits the output and fails if local signals remain or quality checks do not pass.
+
+## How to start
+
+Requirements: Python 3.9+ and these tools on `PATH`:
+
+```text
+ffmpeg  ffprobe  exiftool  c2patool
+```
+
+Run it:
 
 ```bash
-python3 ai-video-cleaner.py INPUT [-o OUT] \
-  [--create-dt 2026-09-24T06:17:20Z] \
-  [--keep-audio] \
-  [--show-report] \
-  [--force]
+python3 ai-video-cleaner.py path/to/video.mp4
 ```
 
-| flag | |
-|---|---|
-| `INPUT` | input mp4/mov/m4v (positional) |
-| `-o OUT` | output (défaut `<input>-clean.mp4`) |
-| `--create-dt ISO` | re-métadater `creation_time` (défaut 1904 zéroé par `-map_metadata -1`) |
-| `--keep-audio` | garde la piste audio (défaut `-an`) |
-| `--show-report` | affiche le rapport (sinon stderr) |
-| `--force` | overwrite sans demander |
+Output:
 
-## Boucle
-
-1. **Pré-check** — `ffprobe` sur l'input : format `mp4/mov/m4a`,
-   ≥1 video (`h264/hevc/mpeg4/vc1/vp8/vp9/av1`),
-   `--keep-audio` exige ≥1 audio (`aac/ac3/mp3/vorbis`).
-   Sinon exit 2.
-
-2. **Remux** —
-   ```
-   ffmpeg -y -i INPUT \
-     -c:v libx264 -crf 20 -preset medium \
-     -c:a aac -b:a 128k \
-     -map 0:v [-map 0:a si --keep-audio] \
-     -map_metadata -1 \
-     [-metadata creation_time=...] \
-     -an -sn -dn \
-     OUT
-   ```
-
-3. **Checks sur l'output** —
-   - `ffprobe -show_format -show_streams -of json` → streams/dur/tags
-   - `exiftool -a -G1 -s -n` → ftyp, mvhd, tracks, udta
-   - box scan top-level python : `ftyp + mdat + moov (+ free)`
-   - strings : grep -F des 8 marqueurs
-    `Seedance Seedream Dreamina ByteDance CapCut C2PA "Content Credentials" "AI generated"`
-   - `c2patool -o .c2patool OUT` → `No claim found`
-
-4. **Rapport JSON** — `.ai-video-cleaner.json` dans le cwd +
-   `--show-report`.
-
-## Rapport
-
-```json
-{
-  "input":  { "path", "size", "format", "tags", "streams": [...] },
-  "output": { "path", "size", "streams", "boxes", "ftyp_brand",
-              "creation_time", "strings_found" },
-  "checks": { "ffprobe", "exiftool", "c2patool", "strings" },
-  "verdict": "clean"
-}
+```text
+path/to/video-clean.mp4
 ```
 
-## Sample
-
-`ai-video/` :
-
-- `ai-video.mp4` — export Seedance/Dreamina (4,715,336 bytes,
-  mp42, 1 audio aac 44.1k stereo + 1 video h264 High 480x854 @60fps,
-  ~6.07s)
-- `ai-video-clean.mp4` — sortie du script (867,598 bytes = 847KiB,
-  ftyp `isom`, 1 track h264 854x480, mdat avant moov,
-  x264 core 165 r3222)
-
-Vérification :
+Inspect without creating a video:
 
 ```bash
-python3 ai-video-cleaner.py ai-video/ai-video.mp4 \
-  --create-dt 2026-09-24T06:17:20Z \
-  --show-report
+python3 ai-video-cleaner.py path/to/video.mp4 --inspect-only
 ```
 
-Attendu :
+Useful options:
 
-- output 847KiB, 1 track h264 854×480 60fps, dur 6.066992
-- ftyp `isom`, brands `isomiso2avc1mp41`
-- creation_time 2026-09-24T06:17:20Z
-- 0x strings (8 marqueers)
-- c2patool `No claim found`
+```bash
+python3 ai-video-cleaner.py INPUT --reencode          # H.264 CRF 18, saturation +4%
+python3 ai-video-cleaner.py INPUT --drop-audio        # remove audio
+python3 ai-video-cleaner.py INPUT --ignore-rotation   # ignore incorrect rotation metadata
+python3 ai-video-cleaner.py INPUT --force              # overwrite an explicit output
+```
 
-## Assumptions
+Optional visible-badge cleanup requires `remove-ai-watermarks[video]` in a separate Python 3.11+ environment:
 
-- `ffmpeg` + `ffprobe` + `exiftool` + `c2patool` en PATH
-  (ffmpeg 9.0.1, exiftool 13.55, c2patool 0.27.22)
-- python3 stdlib (3.9+)
-- C2PA : pas de claim dans le MP4 brut → `No claim found`
-  (claim côté export Dreamina)
-- watermark invisible Seedance 2.5 : pas de détecteur public
+```bash
+uv tool install --force 'remove-ai-watermarks[video]'
+python3 ai-video-cleaner.py INPUT --remove-visible-seedance
+```
 
-## Exit codes
+## Tests
 
-| code | |
-|---|---|
-| 0 | OK |
-| 1 | bad flag / tool pas en PATH / pas d'overwrite |
-| 2 | input pas mp4/mov/m4a / pas de video / codec inattendu |
-| 3 | box scan top-level pas au EOF |
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+The report JSON and an optional HTML frame sheet are written to the paths shown by the command. A clean local report is not proof that a video is undetectable: invisible watermarks and platform classifiers are not tested.
