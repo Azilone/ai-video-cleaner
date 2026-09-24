@@ -2,26 +2,21 @@
 
 Clean explicit, locally visible AI-provenance signals from MP4/MOV/M4V files.
 
-## TL;DR
+## Why?
 
-```text
-video.mp4  ── inspect locally ──▶  video-clean.mp4
-```
-
-- Runs locally. No video is uploaded.
-- Copies video and audio streams by default, so encoded media stays unchanged.
-- Removes metadata and checks C2PA and known text markers.
-- Does not detect invisible watermarks or predict platform labels.
+AI videos can be flagged by Instagram, TikTok, and other platforms.
 
 ## Before → After
 
 | Before | After |
 | --- | --- |
-| `video.mp4` | `video-clean.mp4` |
-| Metadata, C2PA, or known AI markers may be present | Explicit local signals are removed or reported |
-| Original video and audio | Video and audio copied unchanged by default |
+| ❌ AI video flagged by a platform | ✅ Metadata cleaned |
+| ❌ Spoofed or leftover metadata | ✅ C2PA checked |
+| ❌ C2PA or known AI markers | ✅ Local signals checked |
 
-The tool re-audits the output and fails if local signals remain or quality checks do not pass.
+Runs locally. No video is uploaded. Video and audio are copied unchanged by default.
+
+> ⚠️ This checks local signals only. It does not guarantee platform approval or remove invisible watermarks.
 
 ## How to start
 
