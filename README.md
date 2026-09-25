@@ -2,6 +2,30 @@
 
 Clean embedded metadata and locally visible provenance from videos and still images.
 
+## Interface web
+
+La page analyse le fichier dès l'envoi et affiche les indices locaux trouvés. Le réencodage vidéo est coché par défaut et les métadonnées intégrées sont supprimées automatiquement. Après nettoyage, un tableau détaille la vérification et le résultat est téléchargeable.
+Les fichiers temporaires sont supprimés au bout d'une heure. Aucun compte n'est prévu.
+
+Pour lancer en local, installez Python 3.9+, `ffmpeg`, `ffprobe`, `exiftool` et `c2patool`, puis :
+
+```bash
+uv venv .venv
+uv pip install --python .venv/bin/python -r requirements.txt
+.venv/bin/python web.py
+```
+
+Ouvrez <http://127.0.0.1:8000>. Taille maximale : 500 Mo. Images animées et TIFF multipages non pris en charge. L'analyse cherche des indices locaux de provenance ; elle ne peut pas conclure avec certitude qu'un fichier a été créé par IA.
+
+Pour un hébergeur qui accepte Docker, construisez l'image Linux x86_64 puis exposez le port 8000 :
+
+```bash
+docker build --platform linux/amd64 -t ai-video-cleaner .
+docker run --platform linux/amd64 -p 8000:8000 ai-video-cleaner
+```
+
+La plateforme d'hébergement doit accepter les uploads jusqu'à 500 Mo, un délai de traitement pouvant atteindre 15 minutes et assez d'espace temporaire pour l'entrée et la sortie. Une page HTML statique seule ne peut pas exécuter le nettoyage : elle doit être hébergée avec ce serveur Python.
+
 ## Images
 
 The same command accepts JPG, PNG, WebP, TIFF, BMP, GIF, AVIF, HEIC, and HEIF when Pillow can decode them. Still images are re-encoded as WebP. EXIF orientation is applied, an embedded color profile is converted to sRGB, and metadata is omitted. Animated and multipage images are rejected.

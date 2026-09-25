@@ -1,0 +1,9 @@
+.git
+.venv
+__pycache__
+tests
+ai-video
+.ai-video-cleaner.json
+.c2patool
+*.audit.json
+.DS_Store

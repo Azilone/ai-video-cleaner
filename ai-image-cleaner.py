@@ -5,6 +5,7 @@ import argparse
 import io
 import json
 from pathlib import Path
+import re
 import shutil
 import struct
 import subprocess
@@ -21,6 +22,13 @@ except ImportError:
 
 class CleanerError(Exception):
     pass
+
+
+AI_MARKER_PATTERN = re.compile(
+    r"seedance|seedream|dreamina|bytedance|capcut|c2pa|content.credentials|"
+    r"ai[ -_]?generat|\baigc\b|trainedAlgorithmicMedia|\bworkflow\b|\bprompt\b",
+    re.IGNORECASE,
+)
 
 
 def run(command):
@@ -51,7 +59,7 @@ def webp_chunks(path):
     return chunks
 
 
-def exif_tags(path):
+def exif_metadata(path):
     result = run(["exiftool", "-a", "-G1", "-s", "-json", str(path)])
     if result.returncode:
         raise CleanerError(result.stderr.strip() or "exiftool failed")
@@ -60,8 +68,11 @@ def exif_tags(path):
     except (ValueError, IndexError, TypeError) as exc:
         raise CleanerError(f"invalid exiftool response: {exc}") from exc
     structural = ("System:", "File:", "ExifTool:", "RIFF:", "WebP:", "Composite:")
-    return sorted(key for key in tags if key != "SourceFile" and
-                  not key.startswith(structural))
+    metadata = {key: value for key, value in tags.items() if key != "SourceFile" and
+                not key.startswith(structural)}
+    markers = sorted(key for key, value in metadata.items() if
+                     AI_MARKER_PATTERN.search(f"{key} {value}"))
+    return sorted(metadata), markers
 
 
 def c2pa_status(path):
@@ -81,7 +92,7 @@ def audit(path):
                     "height": image.height, "frames": getattr(image, "n_frames", 1)}
     except (OSError, UnidentifiedImageError, ValueError) as exc:
         raise CleanerError(f"cannot read image: {exc}") from exc
-    info["metadata_tags"] = exif_tags(path)
+    info["metadata_tags"], info["ai_markers"] = exif_metadata(path)
     info["c2pa"] = c2pa_status(path)
     if info["format"] == "WEBP":
         info["webp_chunks"] = webp_chunks(path)
