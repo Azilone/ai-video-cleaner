@@ -1,6 +1,36 @@
 # ai-video-cleaner
 
-Clean explicit, locally visible AI-provenance signals from MP4/MOV/M4V files.
+Clean embedded metadata and locally visible provenance from videos and still images.
+
+## Images
+
+The same command accepts JPG, PNG, WebP, TIFF, BMP, GIF, AVIF, HEIC, and HEIF when Pillow can decode them. Still images are re-encoded as WebP. EXIF orientation is applied, an embedded color profile is converted to sRGB, and metadata is omitted. Animated and multipage images are rejected.
+
+Install the image dependency once (Python 3.9+):
+
+```bash
+uv venv .venv
+uv pip install --python .venv/bin/python -r requirements-image.txt
+```
+
+`exiftool` and `c2patool` must also be on `PATH`. Then run the same entry point:
+
+```bash
+python3 ai-video-cleaner.py /chemin/vers/photo.jpg
+```
+
+This writes `/chemin/vers/photo-clean.webp`. Existing output names get `-2`, `-3`, and so on. The source is preserved.
+An audit report is saved at the path shown by the command.
+
+```bash
+python3 ai-video-cleaner.py photo.png --inspect-only
+python3 ai-video-cleaner.py photo.png --lossless --report photo.audit.json
+python3 ai-video-cleaner.py photo.png --quality 90 -o cleaned.webp
+```
+
+The saved WebP is checked for EXIF/XMP/ICC chunks, metadata tags, and C2PA claims. Invisible pixel watermarks and AI classifier scores are not checked. Removing metadata and re-encoding cannot guarantee that an AI detector will classify an image differently.
+
+## Videos
 
 ## Why?
 
@@ -10,7 +40,7 @@ AI videos can be flagged by Instagram, TikTok, and other platforms.
 
 | Before | After |
 | --- | --- |
-| ❌ AI video flagged by a platform | ✅ Metadata cleaned |
+| ❌ Embedded provenance in the file | ✅ Locally visible metadata cleaned |
 | ❌ Spoofed or leftover metadata | ✅ C2PA checked |
 | ❌ C2PA or known AI markers | ✅ Local signals checked |
 
@@ -63,7 +93,7 @@ python3 ai-video-cleaner.py INPUT --remove-visible-seedance
 ## Tests
 
 ```bash
-python3 -m unittest discover -s tests -v
+.venv/bin/python -m unittest discover -s tests -v
 ```
 
 The report JSON and an optional HTML frame sheet are written to the paths shown by the command. A clean local report is not proof that a video is undetectable: invisible watermarks and platform classifiers are not tested.

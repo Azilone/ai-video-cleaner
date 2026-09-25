@@ -5,6 +5,7 @@ import argparse
 import base64
 from datetime import datetime
 import html
+import importlib.util
 import json
 from pathlib import Path
 import re
@@ -27,6 +28,8 @@ METADATA_PATTERN = re.compile(
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 LOCAL_SIGNALS = ("metadata", "c2pa", "byte_markers", "known_provenance")
 SUBTLE_SATURATION = 1.04
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff",
+                  ".bmp", ".gif", ".avif", ".heic", ".heif"}
 
 
 class CleanerError(Exception):
@@ -532,6 +535,34 @@ def create_contact_sheet(source, destination, display_name=None):
 
 
 def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    value_options = {"-o", "--output", "--report", "--contact-sheet", "--create-dt",
+                     "--quality"}
+    source_arg = None
+    skip = False
+    for item in argv:
+        if skip:
+            skip = False
+        elif item in value_options:
+            skip = True
+        elif not item.startswith("-"):
+            source_arg = item
+            break
+    if source_arg and Path(source_arg).suffix.lower() in IMAGE_SUFFIXES:
+        image_script = Path(__file__).with_name("ai-image-cleaner.py")
+        if importlib.util.find_spec("PIL") is None:
+            local_python = Path(__file__).with_name(".venv") / "bin" / "python"
+            if local_python.is_file():
+                return subprocess.call([str(local_python), str(image_script), *argv])
+        spec = importlib.util.spec_from_file_location(
+            "ai_image_cleaner", image_script)
+        image_cleaner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(image_cleaner)
+        try:
+            return image_cleaner.main(argv)
+        except image_cleaner.CleanerError as exc:
+            print(f"ai-image-cleaner: {exc}", file=sys.stderr)
+            return 1
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input", type=Path, help="MP4/MOV/M4V video")
     parser.add_argument("-o", "--output", type=Path, help="output MP4")

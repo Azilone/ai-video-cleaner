@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
+.venv/
 .c2patool/
 .ai-video-cleaner.json
 *.audit.json
